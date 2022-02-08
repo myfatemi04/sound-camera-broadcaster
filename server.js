@@ -1,9 +1,13 @@
 const ws = require('ws');
 const net = require('net');
+const fs = require('fs');
 
 const socketServer = new net.Server();
 socketServer.on('connection', sock => {
 	console.log('Received connection from socket client');
+	// Record data so it can be played back and this code can be tested
+	// even when I don't have the Pi
+	const recordedChunks = [];
 	let partial = '';
 	sock.on('data', data => {
 		partial += data.toString();
@@ -17,6 +21,10 @@ socketServer.on('connection', sock => {
 				JSON.parse(chunk);
 
 				// Broadcast the chunk
+				recordedChunks.push({
+					chunk: JSON.parse(chunk),
+					timestamp: Date.now(),
+				});
 				websocketConnectionPool.forEach(sock => sock.send(chunk));
 
 				// Clear the running partial chunk
@@ -26,6 +34,15 @@ socketServer.on('connection', sock => {
 				partial += chunk;
 			}
 		}
+	});
+
+	sock.on('close', () => {
+		console.log('Socket client disconnected');
+		// Write the recorded data to a file
+		fs.writeFileSync(
+			`recordings/recorded_chunks_${Date.now()}.json`,
+			JSON.stringify(recordedChunks)
+		);
 	});
 });
 
